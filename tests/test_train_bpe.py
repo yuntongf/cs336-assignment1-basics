@@ -1,6 +1,8 @@
 import json
 import time
 
+from cs336_basics.bpe import apply_merge
+
 from .adapters import run_train_bpe
 from .common import FIXTURES_PATH, gpt2_bytes_to_unicode
 
@@ -21,7 +23,15 @@ def test_train_bpe_speed():
         special_tokens=["<|endoftext|>"],
     )
     end_time = time.time()
-    assert end_time - start_time < 1.5
+    elapsed = end_time - start_time
+
+    assert elapsed < 1.5
+
+
+def test_apply_merge():
+    bp = bytes([0xF0]), bytes([0x9F])
+    toks = [bytes([0xF0]), bytes([0x9F]), bytes([0x99]), bytes([0x83])]
+    assert [bytes([0xF0, 0x9F]), bytes([0x99]), bytes([0x83])] == apply_merge(toks, bp)
 
 
 def test_train_bpe():

@@ -1,11 +1,29 @@
-from _typeshed import ReadableBuffer
+import multiprocessing as mp
 import os
-import regex as re
+import time
 from collections import defaultdict
-from typing import BinaryIO
+from functools import wraps
+from typing import Any, BinaryIO, Callable
+
+import regex as re
 
 PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 CHUNK_SIZE = 1024
+
+
+def timer(func: Callable) -> Callable:
+    """Decorator that prints the execution time of a function."""
+
+    @wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        start = time.perf_counter()
+        result = func(*args, **kwargs)
+        end = time.perf_counter()
+        elapsed = end - start
+        print(f"{func.__name__}() took {elapsed:.6f} seconds")
+        return result
+
+    return wrapper
 
 
 def find_chunk_boundaries(
@@ -57,71 +75,149 @@ def find_chunk_boundaries(
 
 def pretokenize_chunk(chunk: str, special_tokens: list[str]) -> dict[bytes, int]:
     tok_to_freq = defaultdict(int)
-    for section in re.split(r('|'.join(special_tokens))):
-        for tok in re.finditer(PAT):
-            tok_to_freq[tok.encode()] += 1 
+    escaped_special_tokens = [re.escape(tok) for tok in special_tokens]
+    for section in re.split("|".join(escaped_special_tokens), chunk):
+        for match in re.finditer(PAT, section):
+            tok_to_freq[match.group(0).encode()] += 1
+    return tok_to_freq
+
 
 def merge_pretokens(pretoken_maps: list[dict[bytes, int]]) -> dict[bytes, int]:
-    res = {}
+    res = defaultdict(int)
     for m in pretoken_maps:
-        res |= m
+        for pretok_bytes, count in m.items():
+            res[pretok_bytes] += count
     return res
-            
-def count_bp_freq(pretok_map: dict[bytes, int]) -> dict[bytes, int]:
-    bp_freq = defaultdict(int)
-    for (tok, count) in pretok_map.items():
+
+
+def count_bp_freq(pretok_map: dict[bytes, int]) -> dict[tuple[bytes, bytes], tuple[int, set[bytes]]]:
+    bp_freq = {}
+    for tok, count in pretok_map.items():
         for i in range(len(tok) - 1):
-            bp = tok[i:i+2]
-            bp_freq[bp] += count
+            bp = (tok[i : i + 1], tok[i + 1 : i + 2])
+            if bp in bp_freq:
+                (old_count, pretoks) = bp_freq[bp]
+                pretoks.add(tok)
+                bp_freq[bp] = (count + old_count, pretoks)
+            else:
+                bp_freq[bp] = (count, set([tok]))
 
     return bp_freq
 
-def merge_tokens(bp_map: dict[bytes, int], special_tokens: list[str], vocab_size: int) -> (list[tuple[bytes, bytes]], dict[bytes, int]):
+
+def apply_merge(toks: list[bytes], merge: tuple[bytes, bytes]) -> list[bytes]:
+    new_toks = []
+    i = 0
+    while i < len(toks):
+        if i == len(toks) - 1 or merge != (toks[i], toks[i + 1]):
+            new_toks.append(toks[i])
+        else:
+            new_toks.append(toks[i] + toks[i + 1])
+            i += 1
+        i += 1
+    return new_toks
 
 
-## Usage
+def merge_tokens(
+    pretok_map: dict[bytes, tuple[list[bytes], int]],
+    bp_map: dict[tuple[bytes, bytes], tuple[int, set[bytes]]],
+    special_tokens: list[str],
+    vocab_size: int,
+) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
+    merges: list[tuple[bytes, bytes]] = []
+    vocab: set[bytes] = set([bytes([i]) for i in range(256)] + [tok.encode() for tok in special_tokens])
+
+    while len(vocab) < vocab_size:
+        _, bp_to_merge = max([(count, (bp1, bp2)) for ((bp1, bp2), (count, _)) in bp_map.items()])
+
+        merges.append(bp_to_merge)
+        vocab.add(bp_to_merge[0] + bp_to_merge[1])
+
+        # find affected pretoks
+        affected_pretoks: set[bytes] = bp_map[bp_to_merge][1]
+        del bp_map[bp_to_merge]
+
+        for pretok_bytes in affected_pretoks:
+            (toks, pretok_count) = pretok_map[pretok_bytes]
+            # remove original counts
+            for i in range(len(toks) - 1):
+                bp = (toks[i], toks[i + 1])
+                if bp in bp_map:
+                    (count, old_pretoks) = bp_map[bp]
+                    old_pretoks.discard(pretok_bytes)
+                    bp_map[bp] = (count - pretok_count, old_pretoks)
+
+            # add new counts
+            new_toks = apply_merge(toks, bp_to_merge)
+            for i in range(len(new_toks) - 1):
+                bp = (new_toks[i], new_toks[i + 1])
+                if bp not in bp_map:
+                    bp_map[bp] = (pretok_count, set([pretok_bytes]))
+                else:
+                    (old_count, old_pretoks) = bp_map[bp]
+                    old_pretoks.add(pretok_bytes)
+                    bp_map[bp] = (old_count + pretok_count, old_pretoks)
+
+            pretok_map[pretok_bytes] = (new_toks, pretok_count)
+
+    vocab_idx = dict(zip(range(len(vocab)), vocab))
+
+    return vocab_idx, merges
+
+
+def pretokenize(start, end, input_path, special_tokens):
+    with open(input_path, "rb") as f:
+        f.seek(start)
+        chunk = f.read(end - start).decode("utf-8", errors="ignore")
+        return pretokenize_chunk(chunk, special_tokens)
+
+
 def bpe_encode(
     input_path: str | os.PathLike,
     vocab_size: int,
     special_tokens: list[str],
-    **kwargs,
-    ):
+) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
 
-    pretok_maps =[]
-
-    # read the file and split on special tokens
+    start_time = time.time()
     with open(input_path, "rb") as f:
-        num_processes = 4
+        num_processes = mp.cpu_count()
         boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
 
-        # parallelize this
-        for start, end in zip(boundaries[:-1], boundaries[1:]):
-            f.seek(start)
-            chunk = f.read(end - start).decode("utf-8", errors="ignore")
-            # Run pre-tokenization on your chunk and store the counts for each pre-token
-            
-            pretok_map = pretokenize_chunk(chunk, special_tokens)
-            pretok_maps.append(pretok_map)
-            
+    pool = mp.Pool(num_processes)
+
+    futs = []
+    for start, end in zip(boundaries[:-1], boundaries[1:]):
+        fut = pool.apply_async(
+            pretokenize,
+            args=(start, end, input_path, special_tokens),
+        )
+        futs.append(fut)
+
+    pool.close()
+    pool.join()
+
+    pretok_maps = []
+    for fut in futs:
+        pretok_maps.append(fut.get())
+
+    read_and_pretok = time.time()
+    print(f"read and pretok: {read_and_pretok - start_time}")
+
     merged_pretok_map = merge_pretokens(pretok_maps)
 
+    merge_pretok = time.time()
+    print(f"merge pretok map {merge_pretok - read_and_pretok}")
+
     bp_map = count_bp_freq(merged_pretok_map)
+    build_bp_map = time.time()
+    print(f"build bp map {build_bp_map - merge_pretok}")
 
-    
+    pretok_map = {
+        pretok_bytes: ([bytes([b]) for b in pretok_bytes], count) for pretok_bytes, count in merged_pretok_map.items()
+    }
 
+    vocab, merged = merge_tokens(pretok_map, bp_map, special_tokens, vocab_size)
+    merge_toks = time.time()
+    print(f"merge toks {merge_toks - build_bp_map}")
 
-    # pre-tokenize using regex
-
-    # count byte pair frequency
-
-    # merge bytes
- #    Returns:
- #        tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
- #            vocab:
- #                The trained tokenizer vocabulary, a mapping from int (token ID in the vocabulary)
- #                to bytes (token bytes)
- #            merges:
- #                BPE merges. Each list item is a tuple of bytes (<token1>, <token2>),
- #                representing that <token1> was merged with <token2>.
- #                Merges are ordered by order of creation.
- # 
+    return vocab, merged

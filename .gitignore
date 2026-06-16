@@ -1,12 +1,9 @@
-# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
 
-# C extensions
 *.so
 
-# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -27,12 +24,9 @@ share/python-wheels/
 MANIFEST
 
 # PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
 
-# Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
 
@@ -161,3 +155,18 @@ cython_debug/
 
 .ruff_cache/
 *.zip
+
+
+# Training data / corpora (large — do NOT commit)
+data/
+
+# Generated training artifacts (vocab/merges pickles, tokenizer output, etc.)
+out/
+
+# Profiling artifacts
+profile.svg
+*.prof
+
+# Editor / tool local config
+.zed/
+.claude/
