@@ -40,6 +40,9 @@ class HeapMap[K, V]:
     def __getitem__(self, k: K) -> V:
         return self.m[k].data.val()
 
+    def __contains__(self, k: K) -> bool:
+        return k in self.m
+
     def insert(self, k: K, v: V):
         item = Item(self.factory(k, v))
         hq.heappush(self.h, item)
@@ -51,15 +54,21 @@ class HeapMap[K, V]:
         self.m[key].valid = False
         self.insert(key, val)
 
+    def _clean_up(self):
+        if len(self.m) / len(self.h) < 0.7:
+            self.h = [item for item in self.h if item.valid]
+            hq.heapify(self.h)
+
     def hinvalidate(self, key: K):
         if key not in self.m:
             raise ValueError("key not in map")
         self.m[key].valid = False
 
-    def pop(self) -> HeapMapMember:
+    def pop(self) -> tuple[K, V]:
+        self._clean_up()
         while len(self.h) > 0:
             item = hq.heappop(self.h)
             if item.valid:
                 del self.m[item.data.key()]
-                return item.data
+                return item.data.key(), item.data.val()
         raise RuntimeError("heap is empty")

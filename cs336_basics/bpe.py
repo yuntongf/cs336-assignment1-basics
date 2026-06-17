@@ -2,12 +2,13 @@ import multiprocessing as mp
 import os
 import time
 from collections import defaultdict
+from dataclasses import dataclass
 from functools import wraps
 from typing import Any, BinaryIO, Callable
 
 import regex as re
 
-from cs336_basics.heap_map import Heap, HeapMap, HeapMapMember, PriorityQueue
+from cs336_basics.heapmap import HeapMap, HeapMapMember
 
 PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 CHUNK_SIZE = 1024
@@ -124,21 +125,21 @@ def apply_merge(toks: list[bytes], merge: tuple[bytes, bytes]) -> list[bytes]:
 type BP = tuple[bytes, bytes]
 
 
+@dataclass
 class BPEntry(HeapMapMember[BP, tuple[int, set[bytes]]]):
-    def __init__(self, k: BP, v: tuple[int, set[bytes]]):
-        self.bp = k
-        self.count, self.raw_pretoks = v
+    bp: BP
+    v: tuple[int, set[bytes]]
 
     def __lt__(self, other) -> bool:
-        if self.count == other.count:
+        if self.v[0] == other.v[0]:
             return self.bp > other.bp
-        return self.count > other.count
+        return self.v[0] > other.v[0]
 
     def key(self) -> BP:
         return self.bp
 
     def val(self) -> tuple[int, set[bytes]]:
-        return self.count, self.raw_pretoks
+        return self.v
 
 
 def merge_tokens(
@@ -149,41 +150,34 @@ def merge_tokens(
 ) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
     merges: list[tuple[bytes, bytes]] = []
     vocab: set[bytes] = set([bytes([i]) for i in range(256)] + [tok.encode() for tok in special_tokens])
-    bp_heap_map = HeapMap(list(bp_map.values()), BPEntry.__init__)
+    bp_heap_map: HeapMap[BP, tuple[int, set[bytes]]] = HeapMap(list(bp_map.items()), BPEntry)
 
     while len(vocab) < vocab_size:
-        bp_to_merge = bp_heap.pop()
+        bp_to_merge, (_, affected_pretoks) = bp_heap_map.pop()
 
         merges.append(bp_to_merge)
         vocab.add(bp_to_merge[0] + bp_to_merge[1])
-
-        # find affected pretoks
-        affected_pretoks: set[bytes] = bp_map[bp_to_merge][1]
-        del bp_map[bp_to_merge]
 
         for pretok_bytes in affected_pretoks:
             (toks, pretok_count) = pretok_map[pretok_bytes]
             # remove original counts
             for i in range(len(toks) - 1):
                 bp = (toks[i], toks[i + 1])
-                if bp in bp_map:
-                    (count, old_pretoks) = bp_map[bp]
+                if bp in bp_heap_map:
+                    (count, old_pretoks) = bp_heap_map[bp]
                     old_pretoks.discard(pretok_bytes)
-                    bp_map[bp] = (count - pretok_count, old_pretoks)
-                    bp_heap.update(bp, count - pretok_count)
+                    bp_heap_map.update(bp, (count - pretok_count, old_pretoks))
 
             # add new counts
             new_toks = apply_merge(toks, bp_to_merge)
             for i in range(len(new_toks) - 1):
                 bp = (new_toks[i], new_toks[i + 1])
-                if bp not in bp_map:
-                    bp_map[bp] = (pretok_count, set([pretok_bytes]))
-                    bp_heap.push(bp, pretok_count)
+                if bp not in bp_heap_map:
+                    bp_heap_map.insert(bp, (pretok_count, set([pretok_bytes])))
                 else:
-                    (old_count, old_pretoks) = bp_map[bp]
+                    (old_count, old_pretoks) = bp_heap_map[bp]
                     old_pretoks.add(pretok_bytes)
-                    bp_map[bp] = (old_count + pretok_count, old_pretoks)
-                    bp_heap.update(bp, old_count + pretok_count)
+                    bp_heap_map.update(bp, (old_count + pretok_count, old_pretoks))
 
             pretok_map[pretok_bytes] = (new_toks, pretok_count)
 
