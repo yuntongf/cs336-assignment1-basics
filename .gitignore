@@ -1,7 +1,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
+.DS_Store
 *.so
 
 .Python
@@ -22,6 +22,7 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+train.bin
 
 # PyInstaller
 *.manifest

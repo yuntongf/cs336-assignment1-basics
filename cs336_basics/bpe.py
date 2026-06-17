@@ -7,6 +7,8 @@ from typing import Any, BinaryIO, Callable
 
 import regex as re
 
+from cs336_basics.heap_map import Heap, HeapMap, HeapMapMember, PriorityQueue
+
 PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 CHUNK_SIZE = 1024
 
@@ -42,11 +44,12 @@ def find_chunk_boundaries(
     file_size = file.tell()
     file.seek(0)
 
-    chunk_size = file_size // desired_num_chunks
+    chunk_size = 2**28
+    num_chunks = (file_size + chunk_size - 1) // chunk_size
 
     # Initial guesses for chunk boundary locations, uniformly spaced
     # Chunks start on previous index, don't include last index
-    chunk_boundaries = [i * chunk_size for i in range(desired_num_chunks + 1)]
+    chunk_boundaries = [i * chunk_size for i in range(num_chunks + 1)]
     chunk_boundaries[-1] = file_size
 
     mini_chunk_size = 4096  # Read ahead by 4k bytes at a time
@@ -118,6 +121,26 @@ def apply_merge(toks: list[bytes], merge: tuple[bytes, bytes]) -> list[bytes]:
     return new_toks
 
 
+type BP = tuple[bytes, bytes]
+
+
+class BPEntry(HeapMapMember[BP, tuple[int, set[bytes]]]):
+    def __init__(self, k: BP, v: tuple[int, set[bytes]]):
+        self.bp = k
+        self.count, self.raw_pretoks = v
+
+    def __lt__(self, other) -> bool:
+        if self.count == other.count:
+            return self.bp > other.bp
+        return self.count > other.count
+
+    def key(self) -> BP:
+        return self.bp
+
+    def val(self) -> tuple[int, set[bytes]]:
+        return self.count, self.raw_pretoks
+
+
 def merge_tokens(
     pretok_map: dict[bytes, tuple[list[bytes], int]],
     bp_map: dict[tuple[bytes, bytes], tuple[int, set[bytes]]],
@@ -126,9 +149,10 @@ def merge_tokens(
 ) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
     merges: list[tuple[bytes, bytes]] = []
     vocab: set[bytes] = set([bytes([i]) for i in range(256)] + [tok.encode() for tok in special_tokens])
+    bp_heap_map = HeapMap(list(bp_map.values()), BPEntry.__init__)
 
     while len(vocab) < vocab_size:
-        _, bp_to_merge = max([(count, (bp1, bp2)) for ((bp1, bp2), (count, _)) in bp_map.items()])
+        bp_to_merge = bp_heap.pop()
 
         merges.append(bp_to_merge)
         vocab.add(bp_to_merge[0] + bp_to_merge[1])
@@ -146,6 +170,7 @@ def merge_tokens(
                     (count, old_pretoks) = bp_map[bp]
                     old_pretoks.discard(pretok_bytes)
                     bp_map[bp] = (count - pretok_count, old_pretoks)
+                    bp_heap.update(bp, count - pretok_count)
 
             # add new counts
             new_toks = apply_merge(toks, bp_to_merge)
@@ -153,10 +178,12 @@ def merge_tokens(
                 bp = (new_toks[i], new_toks[i + 1])
                 if bp not in bp_map:
                     bp_map[bp] = (pretok_count, set([pretok_bytes]))
+                    bp_heap.push(bp, pretok_count)
                 else:
                     (old_count, old_pretoks) = bp_map[bp]
                     old_pretoks.add(pretok_bytes)
                     bp_map[bp] = (old_count + pretok_count, old_pretoks)
+                    bp_heap.update(bp, old_count + pretok_count)
 
             pretok_map[pretok_bytes] = (new_toks, pretok_count)
 
@@ -196,14 +223,12 @@ def bpe_encode(
     pool.close()
     pool.join()
 
-    pretok_maps = []
+    merged_pretok_map = {}
     for fut in futs:
-        pretok_maps.append(fut.get())
+        merged_pretok_map = merge_pretokens([fut.get(), merged_pretok_map])
 
     read_and_pretok = time.time()
     print(f"read and pretok: {read_and_pretok - start_time}")
-
-    merged_pretok_map = merge_pretokens(pretok_maps)
 
     merge_pretok = time.time()
     print(f"merge pretok map {merge_pretok - read_and_pretok}")
