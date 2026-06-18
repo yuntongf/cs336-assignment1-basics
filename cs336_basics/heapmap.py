@@ -18,7 +18,7 @@ class HeapMapMember[K, V](ABC):
     def val(self) -> V: ...
 
 
-@dataclass(order=True)
+@dataclass(order=True, slots=True)
 class Item[K, V]:
     data: HeapMapMember
     valid: bool = field(default=True, compare=False)
@@ -55,7 +55,7 @@ class HeapMap[K, V]:
         self.insert(key, val)
 
     def _clean_up(self):
-        if len(self.m) / len(self.h) < 0.7:
+        if len(self.m) / len(self.h) < 0.5:
             self.h = [item for item in self.h if item.valid]
             hq.heapify(self.h)
 

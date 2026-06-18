@@ -125,7 +125,7 @@ def apply_merge(toks: list[bytes], merge: tuple[bytes, bytes]) -> list[bytes]:
 type BP = tuple[bytes, bytes]
 
 
-@dataclass
+@dataclass(slots=True)
 class BPEntry(HeapMapMember[BP, tuple[int, set[bytes]]]):
     bp: BP
     v: tuple[int, set[bytes]]

@@ -15,7 +15,7 @@ if __name__ == "__main__":
 
     vocab, merges = bpe_encode(
         input_path=input_path,
-        vocab_size=10_000,
+        vocab_size=32_000,
         special_tokens=["<|endoftext|>"],
     )
 
