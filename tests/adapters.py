@@ -11,8 +11,11 @@ from torch import Tensor
 
 from cs336_basics.bpe import bpe_encode
 from cs336_basics.embedding import Embedding
+from cs336_basics.ffnn import FFN
 from cs336_basics.linear import Linear
 from cs336_basics.rms_norm import RMSNorm
+from cs336_basics.rope import RoPe
+from cs336_basics.softmax import softmax
 from cs336_basics.tokenizer import Tokenizer
 
 
@@ -91,7 +94,12 @@ def run_swiglu(
     # swiglu.w1.weight.data = w1_weight
     # swiglu.w2.weight.data = w2_weight
     # swiglu.w3.weight.data = w3_weight
-    raise NotImplementedError
+    swiglu = FFN(d_model, d_ff)
+    swiglu.l1.update(w1_weight)
+    swiglu.l2.update(w2_weight)
+    swiglu.l3.update(w3_weight)
+
+    return swiglu.forward(in_features)
 
 
 def run_scaled_dot_product_attention(
@@ -208,7 +216,8 @@ def run_rope(
     Returns:
         Float[Tensor, " ... sequence_length d_k"]: Tensor with RoPEd input.
     """
-    raise NotImplementedError
+    rope = RoPe(theta, d_k, max_seq_len)
+    return rope.forward(in_query_or_key, token_positions)
 
 
 def run_transformer_block(
@@ -401,7 +410,7 @@ def run_silu(in_features: Float[Tensor, " ..."]) -> Float[Tensor, " ..."]:
         Float[Tensor,"..."]: of with the same shape as `in_features` with the output of applying
         SiLU to each element.
     """
-    raise NotImplementedError
+    return FFN.silu(in_features)
 
 
 def run_get_batch(
@@ -440,7 +449,7 @@ def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, "
         Float[Tensor, "..."]: Tensor of with the same shape as `in_features` with the output of
         softmax normalizing the specified `dim`.
     """
-    raise NotImplementedError
+    return softmax(in_features, dim)
 
 
 def run_cross_entropy(
