@@ -9,6 +9,7 @@ import torch
 from jaxtyping import Bool, Float, Int
 from torch import Tensor
 
+from cs336_basics.attention import MultiHeadSelfAttention, scaled_dot_product_attention
 from cs336_basics.bpe import bpe_encode
 from cs336_basics.embedding import Embedding
 from cs336_basics.ffnn import FFN
@@ -120,7 +121,7 @@ def run_scaled_dot_product_attention(
     Returns:
         Float[Tensor, " ... queries d_v"]: Output of SDPA
     """
-    raise NotImplementedError
+    return scaled_dot_product_attention(Q, K, V, mask)
 
 
 def run_multihead_self_attention(
@@ -154,7 +155,12 @@ def run_multihead_self_attention(
         Float[Tensor, " ... sequence_length d_model"]: Tensor with the output of running your optimized, batched multi-headed attention
         implementation with the given QKV projection weights and input features.
     """
-    raise NotImplementedError
+    attn = MultiHeadSelfAttention(d_model, num_heads)
+    attn.Wq.update(q_proj_weight)
+    attn.Wk.update(k_proj_weight)
+    attn.Wv.update(v_proj_weight)
+    attn.Wo.update(o_proj_weight)
+    return attn.forward(in_features)
 
 
 def run_multihead_self_attention_with_rope(
@@ -194,7 +200,12 @@ def run_multihead_self_attention_with_rope(
         Float[Tensor, " ... sequence_length d_model"]: Tensor with the output of running your optimized, batched multi-headed attention
         implementation with the given QKV projection weights and input features.
     """
-    raise NotImplementedError
+    attn = MultiHeadSelfAttention(d_model, num_heads, max_seq_len)
+    attn.Wq.update(q_proj_weight)
+    attn.Wk.update(k_proj_weight)
+    attn.Wv.update(v_proj_weight)
+    attn.Wo.update(o_proj_weight)
+    return attn.forward(in_features)
 
 
 def run_rope(
