@@ -22,3 +22,6 @@ class Embedding(torch.nn.Module):
     def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
         indices = torch.LongTensor(token_ids)
         return self.W[indices]
+
+    def init_weights(self, weights: Float[torch.Tensor, " num_embeddings embedding_dim"]):
+        self.W = torch.nn.Parameter(weights)

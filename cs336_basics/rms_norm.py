@@ -30,3 +30,6 @@ class RMSNorm(torch.nn.Module):
         res = x * self.g / rms
 
         return res.to(in_dtype)
+
+    def init_weights(self, weights: Float[torch.Tensor, " d_model"]):
+        self.g = torch.nn.Parameter(weights)

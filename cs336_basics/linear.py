@@ -15,5 +15,5 @@ class Linear(torch.nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x @ self.W.T
 
-    def update(self, w: torch.Tensor):
+    def init_weights(self, w: torch.Tensor):
         self.W = torch.nn.Parameter(w)

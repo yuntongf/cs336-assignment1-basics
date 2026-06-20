@@ -18,6 +18,7 @@ from cs336_basics.rms_norm import RMSNorm
 from cs336_basics.rope import RoPe
 from cs336_basics.softmax import softmax
 from cs336_basics.tokenizer import Tokenizer
+from cs336_basics.transformer import TransformerBlock, TransformerLM
 
 
 def run_linear(
@@ -40,7 +41,7 @@ def run_linear(
     """
 
     linear = Linear(d_in, d_out)
-    linear.update(weights)
+    linear.init_weights(weights)
     return linear.forward(in_features)
 
 
@@ -96,9 +97,9 @@ def run_swiglu(
     # swiglu.w2.weight.data = w2_weight
     # swiglu.w3.weight.data = w3_weight
     swiglu = FFN(d_model, d_ff)
-    swiglu.l1.update(w1_weight)
-    swiglu.l2.update(w2_weight)
-    swiglu.l3.update(w3_weight)
+    swiglu.l1.init_weights(w1_weight)
+    swiglu.l2.init_weights(w2_weight)
+    swiglu.l3.init_weights(w3_weight)
 
     return swiglu.forward(in_features)
 
@@ -156,10 +157,10 @@ def run_multihead_self_attention(
         implementation with the given QKV projection weights and input features.
     """
     attn = MultiHeadSelfAttention(d_model, num_heads)
-    attn.Wq.update(q_proj_weight)
-    attn.Wk.update(k_proj_weight)
-    attn.Wv.update(v_proj_weight)
-    attn.Wo.update(o_proj_weight)
+    attn.Wq.init_weights(q_proj_weight)
+    attn.Wk.init_weights(k_proj_weight)
+    attn.Wv.init_weights(v_proj_weight)
+    attn.Wo.init_weights(o_proj_weight)
     return attn.forward(in_features)
 
 
@@ -201,10 +202,10 @@ def run_multihead_self_attention_with_rope(
         implementation with the given QKV projection weights and input features.
     """
     attn = MultiHeadSelfAttention(d_model, num_heads, max_seq_len)
-    attn.Wq.update(q_proj_weight)
-    attn.Wk.update(k_proj_weight)
-    attn.Wv.update(v_proj_weight)
-    attn.Wo.update(o_proj_weight)
+    attn.Wq.init_weights(q_proj_weight)
+    attn.Wk.init_weights(k_proj_weight)
+    attn.Wv.init_weights(v_proj_weight)
+    attn.Wo.init_weights(o_proj_weight)
     return attn.forward(in_features)
 
 
@@ -301,7 +302,22 @@ def run_transformer_block(
         Float[Tensor, "batch sequence_length d_model"] Tensor with the output of
         running the Transformer block on the input features while using RoPE.
     """
-    raise NotImplementedError
+    transformer = TransformerBlock(d_model, num_heads, d_ff, max_seq_len)
+    if transformer.attn.rope is not None:
+        transformer.attn.rope.theta = theta
+
+    transformer.attn_norm.init_weights(weights["ln1.weight"])
+    transformer.attn.Wq.init_weights(weights["attn.q_proj.weight"])
+    transformer.attn.Wk.init_weights(weights["attn.k_proj.weight"])
+    transformer.attn.Wv.init_weights(weights["attn.v_proj.weight"])
+    transformer.attn.Wo.init_weights(weights["attn.output_proj.weight"])
+
+    transformer.ffn_norm.init_weights(weights["ln2.weight"])
+    transformer.ffn.l1.init_weights(weights["ffn.w1.weight"])
+    transformer.ffn.l2.init_weights(weights["ffn.w2.weight"])
+    transformer.ffn.l3.init_weights(weights["ffn.w3.weight"])
+
+    return transformer.forward(in_features)
 
 
 def run_transformer_lm(
@@ -383,7 +399,27 @@ def run_transformer_lm(
         Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
         next-word distribution for each token.
     """
-    raise NotImplementedError
+    lm = TransformerLM(d_model, num_heads, d_ff, vocab_size, context_length, num_layers)
+    lm.embedding.init_weights(weights["token_embeddings.weight"])
+    for i in range(num_layers):
+        if lm.transformers[i].attn.rope is not None:
+            lm.transformers[i].attn.rope.theta = rope_theta
+
+        lm.transformers[i].attn_norm.init_weights(weights[f"layers.{i}.ln1.weight"])
+        lm.transformers[i].attn.Wq.init_weights(weights[f"layers.{i}.attn.q_proj.weight"])
+        lm.transformers[i].attn.Wk.init_weights(weights[f"layers.{i}.attn.k_proj.weight"])
+        lm.transformers[i].attn.Wv.init_weights(weights[f"layers.{i}.attn.v_proj.weight"])
+        lm.transformers[i].attn.Wo.init_weights(weights[f"layers.{i}.attn.output_proj.weight"])
+
+        lm.transformers[i].ffn_norm.init_weights(weights[f"layers.{i}.ln2.weight"])
+        lm.transformers[i].ffn.l1.init_weights(weights[f"layers.{i}.ffn.w1.weight"])
+        lm.transformers[i].ffn.l2.init_weights(weights[f"layers.{i}.ffn.w2.weight"])
+        lm.transformers[i].ffn.l3.init_weights(weights[f"layers.{i}.ffn.w3.weight"])
+
+    lm.norm.init_weights(weights["ln_final.weight"])
+    lm.project.init_weights(weights["lm_head.weight"])
+
+    return lm.forward(in_indices)
 
 
 def run_rmsnorm(

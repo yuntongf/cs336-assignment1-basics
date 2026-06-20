@@ -18,7 +18,6 @@ def scaled_dot_product_attention(
     qk = torch.einsum("...qd,...kd->...qk", Q, K)
     scaled_qk = qk / (d_k**0.5)  # (..., num_q, num_k)
     if mask is not None:
-        print(scaled_qk.shape, mask.shape)
         scaled_qk = torch.masked_fill(scaled_qk, ~mask, -torch.inf)
 
     return torch.einsum("...qk,...kd->...qd", softmax(scaled_qk, -1), V)
