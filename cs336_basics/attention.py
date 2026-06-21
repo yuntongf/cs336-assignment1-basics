@@ -20,7 +20,7 @@ def scaled_dot_product_attention(
     if mask is not None:
         scaled_qk = torch.masked_fill(scaled_qk, ~mask, -torch.inf)
 
-    return torch.einsum("...qk,...kd->...qd", softmax(scaled_qk, -1), V)
+    return torch.einsum("...qk,...kv->...qv", softmax(scaled_qk, -1), V)
 
 
 class MultiHeadSelfAttention(torch.nn.Module):
