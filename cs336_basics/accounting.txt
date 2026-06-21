@@ -1,0 +1,54 @@
+# embedding: find the embeddings of given token ids
+in: batch * context
+out: batch * context * d_model
+weights: vocab_size * d_model
+
+# transformer blocks * num_blocks
+in: batch * context * d_model
+out: batch * context * d_model
+
+## norm
+in: batch * context * d_model
+out: batch * context * d_model
+
+## multihead attention
+in: batch * context * d_model
+out: batch * context * d_model
+
+### Wq @ x
+in: batch * context * d_model
+out: batch * context (queries) * d_q (per head)
+### Wk @ x
+in: batch * context * d_model
+out: batch * context (keys) * d_k (per head)
+### Wv @ x
+in: batch * context * d_model
+out: batch * context (keys) * d_v (per head)
+
+### QK
+out: batch * context(queries) * context(keys) (per head)
+### softmax(QK) * V
+out: batch * context(queries) * d_v (per head)
+### WoA
+in: batch * context(queries) * (num_heads * d_v)
+out: batch * context * d_model
+
+## norm
+in: batch * context * d_model
+out: batch * context * d_model
+
+## ffn
+in: batch * context * d_model
+out: batch * context * d_model
+
+# final_norm
+in: batch * context * d_model
+out: batch * context * d_model
+
+# projection
+in: batch * context * d_model
+out: batch * context * vocab_size
+
+# softmax
+in: batch * context * vocab_size
+out: batch * context * vocab_size

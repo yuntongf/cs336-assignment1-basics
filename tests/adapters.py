@@ -12,6 +12,8 @@ from torch import Tensor
 from cs336_basics.adamw import AdamW, clip_gradient, get_lr_cosine_schedule
 from cs336_basics.attention import MultiHeadSelfAttention, scaled_dot_product_attention
 from cs336_basics.bpe import bpe_encode
+from cs336_basics.checkpointing import load_checkpoint, save_checkpoint
+from cs336_basics.dataloader import get_batch
 from cs336_basics.embedding import Embedding
 from cs336_basics.ffnn import FFN
 from cs336_basics.linear import Linear
@@ -405,7 +407,7 @@ def run_transformer_lm(
     lm.embedding.init_weights(weights["token_embeddings.weight"])
     for i in range(num_layers):
         if lm.transformers[i].attn.rope is not None:
-            lm.transformers[i].attn.rope.theta = rope_theta
+            lm.transformers[i].attn.rope = rope_theta
 
         lm.transformers[i].attn_norm.init_weights(weights[f"layers.{i}.ln1.weight"])
         lm.transformers[i].attn.Wq.init_weights(weights[f"layers.{i}.attn.q_proj.weight"])
@@ -482,7 +484,7 @@ def run_get_batch(
         is the sampled input sequences, and the second tuple item is the corresponding
         language modeling labels.
     """
-    raise NotImplementedError
+    return get_batch(dataset, batch_size, context_length, device)
 
 
 def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, " ..."]:
@@ -582,7 +584,7 @@ def run_save_checkpoint(
             we've completed.
         out (str | os.PathLike | BinaryIO | IO[bytes]): Path or file-like object to serialize the model, optimizer, and iteration to.
     """
-    raise NotImplementedError
+    save_checkpoint(model, optimizer, iteration, out)
 
 
 def run_load_checkpoint(
@@ -603,7 +605,7 @@ def run_load_checkpoint(
     Returns:
         int: the previously-serialized number of iterations.
     """
-    raise NotImplementedError
+    return load_checkpoint(src, model, optimizer)
 
 
 def get_tokenizer(
