@@ -11,11 +11,11 @@ MERGES_FILE = "merges.pkl"
 
 if __name__ == "__main__":
     input_path = pathlib.Path("data") / TINYSTORIES_FILE
-    output_path = pathlib.Path("out")
+    output_path = pathlib.Path("tokenizer")
 
     vocab, merges = bpe_encode(
         input_path=input_path,
-        vocab_size=32_000,
+        vocab_size=10_000,
         special_tokens=["<|endoftext|>"],
     )
 

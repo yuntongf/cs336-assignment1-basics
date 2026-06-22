@@ -22,7 +22,6 @@ class Config:
     betas: tuple[float, float]
     eps: float
     vocab_size: int
-    log_dir: str
 
     @classmethod
     def from_toml(cls, file: str) -> "Config":
@@ -33,21 +32,20 @@ class Config:
         if data_path is None:
             raise ValueError("Must provide data_path")
 
-        training_iter = config["train_it"] or 1000
-        batch_size = config["batch_size"] or 1024
-        context_len = config["context_len"] or 2048
-        d_model = config["d_model"] or 1024
-        d_ff = config["d_ff"] or 512
-        num_heads = config["num_heads"] or 4
-        num_layers = config["num_layers"] or 8
-        lr = config["lr"] or 1e1
-        weight_decay = config["weight_decay"] or 0.9
-        max_lr = config["max_lr"] or 1e3
-        min_lr = config["min_lr"] or 1e1
-        warmup_iters = config["warmup_iters"] or 5
-        cosine_cycle_iters = config["cosine_cycle_iters"] or 100
+        training_iter = config.get("train_iter", 5000)
+        batch_size = config.get("batch_size", 32)
+        context_len = config.get("context_len", 256)
+        d_model = config.get("d_model", 512)
+        d_ff = config.get("d_ff", 1344)
+        num_heads = config.get("num_heads", 16)
+        num_layers = config.get("num_layers", 4)
+        lr = config.get("lr", 1e-3)
+        weight_decay = config.get("weight_decay", 0.9)
+        max_lr = config.get("max_lr", 1e2)
+        min_lr = config.get("min_lr", 1e-2)
+        warmup_iters = config.get("warmup_iters", 100)
+        cosine_cycle_iters = config.get("cosine_cycle_iters", 3500)
         checkpoint_dir = config["checkpoint_dir"]
-        log_dir = config["log_dir"]
 
         betas = (0.9, 0.95)
         eps = 1e-6
@@ -72,5 +70,4 @@ class Config:
             betas,
             eps,
             vocab_size,
-            log_dir,
         )

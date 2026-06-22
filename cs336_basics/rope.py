@@ -4,7 +4,14 @@ from torch import Tensor
 
 
 class RoPe(torch.nn.Module):
-    def __init__(self, theta: float, d_k: int, max_seq_len: int, device: torch.device | None = None) -> None:
+    def __init__(
+        self,
+        theta: float,
+        d_k: int,
+        max_seq_len: int,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+    ) -> None:
         super().__init__()
         self.theta = theta
         self.d_k = d_k
@@ -13,8 +20,8 @@ class RoPe(torch.nn.Module):
         rot_freq = np.array([1 / pow(theta, (2 * k - 2) / d_k) for k in range(1, d_k // 2 + 1)])  # (k, )
         rot_ang = np.array([rot_freq * i for i in range(max_seq_len)])  # (seq_len, k)
 
-        self.register_buffer("rot_sin", Tensor(np.sin(rot_ang)), persistent=False)
-        self.register_buffer("rot_cos", Tensor(np.cos(rot_ang)), persistent=False)
+        self.register_buffer("rot_sin", torch.tensor(np.sin(rot_ang), device=device, dtype=dtype), persistent=False)
+        self.register_buffer("rot_cos", torch.tensor(np.cos(rot_ang), device=device, dtype=dtype), persistent=False)
 
     def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
         """(..., seq_len, d_k), (..., seq_len) -> (..., seq_len, d_k)"""

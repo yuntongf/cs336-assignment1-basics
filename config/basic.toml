@@ -1,2 +1,2 @@
-checkpoint_dir = "checkpoint/"
-data_path = "data/training"
+checkpoint_dir = "checkpoints/"
+data_path = "data/tinystories.npy"

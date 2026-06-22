@@ -1,10 +1,14 @@
 import pickle
 from collections.abc import Iterable
+from io import BufferedReader
+from pathlib import Path
 
+import numpy as np
 import regex as re
 from sympy.solvers.ode.single import Iterator
+from torch.fx.experimental.symbolic_shapes import size_hint
 
-from cs336_basics.bpe import PAT, apply_merge
+from cs336_basics.bpe import PAT, apply_merge, find_chunk_boundaries
 
 
 class Tokenizer:
@@ -24,7 +28,9 @@ class Tokenizer:
         self.special_tokens = set(special_tokens or [])
 
     @classmethod
-    def from_files(cls, vocab_filepath: str, merges_filepath: str, special_tokens: list[str] | None = None):
+    def from_files(
+        cls, vocab_filepath: str | Path, merges_filepath: str | Path, special_tokens: list[str] | None = None
+    ):
         with open(vocab_filepath, "rb") as f:
             vocab = pickle.load(f)
         with open(merges_filepath, "rb") as f:
@@ -90,3 +96,13 @@ class Tokenizer:
         for tok in toks:
             raw_str += tok
         return raw_str.decode(errors="replace")
+
+    def encode_to_file(self, data_path: Path, out_path: Path):
+        with open(data_path, "rb") as data:
+            boundaries = find_chunk_boundaries(data, 0, b"<|endoftext|>")
+
+            with open(out_path, "wb") as out:
+                for i in range(len(boundaries) - 1):
+                    sz = boundaries[i + 1] - boundaries[i]
+                    chunk = data.read(sz).decode("utf-8", errors="ignore")
+                    np.save(out, np.array(self.encode(chunk), dtype=np.int64))

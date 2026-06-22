@@ -30,6 +30,8 @@ class AdamW(torch.optim.Optimizer):
 
                 grad = p.grad.data
 
+                # clip_gradient()
+
                 # weight decay
                 p.data = p.data - lr * decay * p.data
 

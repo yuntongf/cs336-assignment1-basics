@@ -24,17 +24,26 @@ def scaled_dot_product_attention(
 
 
 class MultiHeadSelfAttention(torch.nn.Module):
-    def __init__(self, d_model: int, num_heads: int, max_seq_len: int | None = None):
+    def __init__(
+        self,
+        d_model: int,
+        num_heads: int,
+        max_seq_len: int | None = None,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+    ):
         super().__init__()
         d_q = d_k = d_v = d_model // num_heads
-        self.Wq = Linear(d_model, num_heads * d_q)
-        self.Wk = Linear(d_model, num_heads * d_k)
-        self.Wv = Linear(d_model, num_heads * d_v)
-        self.Wo = Linear(num_heads * d_v, d_model)
-        self.rope = RoPe(10000, d_k, max_seq_len) if max_seq_len is not None else None
+        self.Wq = Linear(d_model, num_heads * d_q, device=device, dtype=dtype)
+        self.Wk = Linear(d_model, num_heads * d_k, device=device, dtype=dtype)
+        self.Wv = Linear(d_model, num_heads * d_v, device=device, dtype=dtype)
+        self.Wo = Linear(num_heads * d_v, d_model, device=device, dtype=dtype)
+        self.rope = RoPe(10_000, d_k, max_seq_len, device=device, dtype=dtype) if max_seq_len is not None else None
         self.num_heads = num_heads
         self.d_model = d_model
         self.d_q, self.d_k, self.d_v = d_q, d_k, d_v
+        self.device = device
+        self.dtype = dtype
 
     def forward(self, x: Tensor):
         Q = self.Wq.forward(x)  # (..., queries, num_heads * d_q)
@@ -47,13 +56,13 @@ class MultiHeadSelfAttention(torch.nn.Module):
             Ki = K[..., i * self.d_k : (i + 1) * self.d_k]  # ... keys, d_k
             Vi = V[..., i * self.d_v : (i + 1) * self.d_v]  # ... keys, d_v
 
-            mask_q = torch.arange(Qi.shape[-2]).unsqueeze(-1)
-            mask_k = torch.arange(Ki.shape[-2]).unsqueeze(-2)
+            mask_q = torch.arange(Qi.shape[-2], device=self.device).unsqueeze(-1)
+            mask_k = torch.arange(Ki.shape[-2], device=self.device).unsqueeze(-2)
             mask = mask_q >= mask_k  # queries cannot see future keys so q always >= k
 
             if self.rope is not None:
-                Qi = self.rope.forward(Qi, torch.arange(Qi.shape[-2]))
-                Ki = self.rope.forward(Ki, torch.arange(Ki.shape[-2]))
+                Qi = self.rope.forward(Qi, torch.arange(Qi.shape[-2], device=self.device))
+                Ki = self.rope.forward(Ki, torch.arange(Ki.shape[-2], device=self.device))
 
             a = scaled_dot_product_attention(Qi, Ki, Vi, mask)  # ... queries, d_v
             As.append(a)

@@ -163,6 +163,7 @@ data/
 
 # Generated training artifacts (vocab/merges pickles, tokenizer output, etc.)
 out/
+checkpoints/
 
 # Profiling artifacts
 profile.svg
@@ -171,3 +172,5 @@ profile.svg
 # Editor / tool local config
 .zed/
 .claude/
+
+logs/
