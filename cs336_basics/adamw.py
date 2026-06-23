@@ -65,8 +65,6 @@ def clip_gradient(parameters: Iterable[torch.nn.Parameter], max_l2_norm: float, 
 
     overall_l2 = math.sqrt(sum([(param.grad**2).sum() for param in params if param.grad is not None]))
 
-    return overall_l2
-
     if overall_l2 > max_l2_norm:
         for param in params:
             if param.grad is not None:

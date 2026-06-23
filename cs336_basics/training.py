@@ -43,17 +43,15 @@ def main(config_file: str):
         total_loss = 0
         batches = get_batch(dataset, cfg.batch_size, cfg.context_len, device, torch.int64)
 
-        for i in range(len(batches[0])):
-            data, target = batches[0][i], batches[1][i]
+        data, target = batches[0], batches[1]
 
-            logits = model.forward(data)
-            loss = cross_entropy(logits, target)
-            total_loss += loss
-            loss.backward()
+        logits = model.forward(data)
+        loss = cross_entropy(logits.view(-1, cfg.vocab_size), target.view(-1))
+        total_loss += loss
+        loss.backward()
 
-            grad_max_norm = 1e-2
-            l2_norm = clip_gradient(model.parameters(), grad_max_norm)
-            # print(l2_norm)
+        grad_max_norm = 1
+        l2_norm = clip_gradient(model.parameters(), grad_max_norm)
 
         opt.step()
         logger.info(f"iteration {train_it}, total loss {total_loss}")
