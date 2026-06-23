@@ -1,3 +1,8 @@
+embedding:
+
+
+
+
 # embedding: find the embeddings of given token ids
 in: batch * context
 out: batch * context * d_model
@@ -52,3 +57,11 @@ out: batch * context * vocab_size
 # softmax
 in: batch * context * vocab_size
 out: batch * context * vocab_size
+
+vocab_size: 50,257
+context_length: 1,024
+num_layers: 48
+d_model: 1,600
+num_heads: 25
+d_ff: 4,288 (the nearest multiple of 64 to 8
+3 × 1, 600)

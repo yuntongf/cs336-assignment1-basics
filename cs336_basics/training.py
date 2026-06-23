@@ -5,7 +5,7 @@ from argparse import ArgumentParser
 import numpy as np
 import torch
 
-from cs336_basics.adamw import AdamW, get_lr_cosine_schedule
+from cs336_basics.adamw import AdamW, clip_gradient, get_lr_cosine_schedule
 from cs336_basics.checkpointing import save_checkpoint
 from cs336_basics.config import Config
 from cs336_basics.dataloader import get_batch
@@ -25,7 +25,6 @@ def main(config_file: str):
     cfg = Config.from_toml(config_file)
     logger.info(f"starting new experiment, config: {cfg}")
 
-    dtype = torch.float32
     device = torch.device("mps")
 
     if cfg.data_path is None:
@@ -33,7 +32,7 @@ def main(config_file: str):
 
     dataset = np.load(cfg.data_path, mmap_mode="r")
     model = TransformerLM(
-        cfg.d_model, cfg.num_heads, cfg.d_ff, cfg.vocab_size, cfg.context_len, cfg.num_layers, dtype, device
+        cfg.d_model, cfg.num_heads, cfg.d_ff, cfg.vocab_size, cfg.context_len, cfg.num_layers, torch.float32, device
     )
     opt = AdamW(model.parameters(), cfg.lr, cfg.weight_decay, cfg.betas, cfg.eps)
 
@@ -43,14 +42,20 @@ def main(config_file: str):
         opt.zero_grad()
         total_loss = 0
         batches = get_batch(dataset, cfg.batch_size, cfg.context_len, device, torch.int64)
-        for i in range(len(batches)):
+
+        for i in range(len(batches[0])):
             data, target = batches[0][i], batches[1][i]
+
             logits = model.forward(data)
             loss = cross_entropy(logits, target)
             total_loss += loss
             loss.backward()
-            opt.step()
 
+            grad_max_norm = 1e-2
+            l2_norm = clip_gradient(model.parameters(), grad_max_norm)
+            # print(l2_norm)
+
+        opt.step()
         logger.info(f"iteration {train_it}, total loss {total_loss}")
 
         # checkpoint_path = pathlib.Path(cfg.checkpoint_dir) / f"iter_{train_it}"

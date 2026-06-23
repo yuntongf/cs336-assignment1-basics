@@ -174,3 +174,4 @@ profile.svg
 .claude/
 
 logs/
+tokenizer/

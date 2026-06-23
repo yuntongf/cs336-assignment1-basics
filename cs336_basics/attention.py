@@ -37,7 +37,7 @@ class MultiHeadSelfAttention(torch.nn.Module):
         self.Wq = Linear(d_model, num_heads * d_q, device=device, dtype=dtype)
         self.Wk = Linear(d_model, num_heads * d_k, device=device, dtype=dtype)
         self.Wv = Linear(d_model, num_heads * d_v, device=device, dtype=dtype)
-        self.Wo = Linear(num_heads * d_v, d_model, device=device, dtype=dtype)
+        self.Wo = Linear(num_heads * d_q, d_model, device=device, dtype=dtype)
         self.rope = RoPe(10_000, d_k, max_seq_len, device=device, dtype=dtype) if max_seq_len is not None else None
         self.num_heads = num_heads
         self.d_model = d_model

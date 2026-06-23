@@ -1,2 +1,17 @@
 checkpoint_dir = "checkpoints/"
 data_path = "data/tinystories.npy"
+train_iter=5000
+batch_size=32
+
+context_len=256
+d_model=512
+d_ff=1344
+num_heads=16
+num_layers=4
+
+lr=1e-3
+weight_decay=0.05
+max_lr=0.5
+min_lr=1e-3
+warmup_iters=500
+cosine_cycle_iters=4000

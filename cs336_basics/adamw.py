@@ -17,7 +17,8 @@ class AdamW(torch.optim.Optimizer):
                 self.state[p]["second_moments"] = torch.zeros_like(p)
 
     def update_lr(self, lr: float):
-        self.defaults["lr"] = lr
+        for g in self.param_groups:
+            g["lr"] = lr
 
     def step(self, closure: Callable[[], float] | None = None) -> float | None:
         loss = None if closure is None else closure()
@@ -29,8 +30,6 @@ class AdamW(torch.optim.Optimizer):
                 t = state.get("t", 1)
 
                 grad = p.grad.data
-
-                # clip_gradient()
 
                 # weight decay
                 p.data = p.data - lr * decay * p.data
@@ -66,7 +65,12 @@ def clip_gradient(parameters: Iterable[torch.nn.Parameter], max_l2_norm: float, 
 
     overall_l2 = math.sqrt(sum([(param.grad**2).sum() for param in params if param.grad is not None]))
 
+    return overall_l2
+
     if overall_l2 > max_l2_norm:
         for param in params:
             if param.grad is not None:
                 param.grad = param.grad * (max_l2_norm / (overall_l2 + eps))
+        return max_l2_norm
+    else:
+        return overall_l2
